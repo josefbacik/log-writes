@@ -8,8 +8,8 @@
 enum option_indexes {
 	NEXT_FLUSH,
 	NEXT_FUA,
-	START,
-	MARK,
+	START_ENTRY,
+	END_MARK,
 	LOG,
 	REPLAY,
 	LIMIT,
@@ -19,13 +19,14 @@ enum option_indexes {
 	NO_DISCARD,
 	FSCK,
 	CHECK,
+	START_MARK,
 };
 
 static struct option long_options[] = {
 	{"next-flush", no_argument, NULL, 0},
 	{"next-fua", no_argument, NULL, 0},
-	{"start", required_argument, NULL, 0},
-	{"mark", required_argument, NULL, 0},
+	{"start-entry", required_argument, NULL, 0},
+	{"end-mark", required_argument, NULL, 0},
 	{"log", required_argument, NULL, 0},
 	{"replay", required_argument, NULL, 0},
 	{"limit", required_argument, NULL, 0},
@@ -35,6 +36,7 @@ static struct option long_options[] = {
 	{"no-discard", no_argument, NULL, 0},
 	{"fsck", required_argument, NULL, 0},
 	{"check", required_argument, NULL, 0},
+	{"start-mark", required_argument, NULL, 0},
 	{ NULL, 0, NULL, 0 },
 };
 
@@ -46,8 +48,10 @@ static void usage(void)
 	fprintf(stderr, "\t--limit <number> - number of entries to replay\n");
 	fprintf(stderr, "\t--next-flush - replay to/find the next flush\n");
 	fprintf(stderr, "\t--next-fua - replay to/find the next fua\n");
-	fprintf(stderr, "\t--start <entry #> - start at the given entry #\n");
-	fprintf(stderr, "\t--mark <mark> - replay to/ find the given mark\n");
+	fprintf(stderr, "\t--start-entry <entry> - start at the given "
+		"entry #\n");
+	fprintf(stderr, "\t--start-mark <mark> - mark to start from\n");
+	fprintf(stderr, "\t--end-mark <mark> - replay to/find the given mark\n");
 	fprintf(stderr, "\t--find - put replay-log in find mode, will search "
 		"based on the other options\n");
 	fprintf(stderr, "\t--number-entries - print the number of entries in "
@@ -89,6 +93,23 @@ enum log_replay_check_mode {
 	CHECK_FLUSH = 3,
 };
 
+static int seek_to_mark(struct log *log, struct log_write_entry *entry,
+			char *mark)
+{
+	int ret;
+
+	while ((ret = log_seek_next_entry(log, entry, 1)) == 0) {
+		if (should_stop(entry, LOG_MARK_FLAG, mark))
+			break;
+	}
+	if (ret == 1) {
+		fprintf(stderr, "Couldn't find starting mark\n");
+		ret = -1;
+	}
+
+	return ret;
+}
+
 int main(int argc, char **argv)
 {
 	char *logfile = NULL, *replayfile = NULL, *fsck_command = NULL;
@@ -98,7 +119,7 @@ int main(int argc, char **argv)
 	u64 run_limit = 0;
 	u64 num_entries = 0;
 	u64 check_number;
-	char *mark = NULL;
+	char *end_mark = NULL, *start_mark = NULL;
 	char *tmp = NULL;
 	struct log *log;
 	int find_mode = 0;
@@ -126,7 +147,7 @@ int main(int argc, char **argv)
 		case NEXT_FUA:
 			stop_flags |= LOG_FUA_FLAG;
 			break;
-		case START:
+		case START_ENTRY:
 			start_entry = strtoull(optarg, &tmp, 0);
 			if (tmp && *tmp != '\0') {
 				fprintf(stderr, "Invalid entry number\n");
@@ -134,15 +155,28 @@ int main(int argc, char **argv)
 			}
 			tmp = NULL;
 			break;
-		case MARK:
+		case START_MARK:
 			/*
 			 * Biggest sectorsize is 4k atm, so limit the mark to 4k
 			 * minus the size of the entry.  Say 4097 since we want
 			 * an extra slot for \0.
 			 */
-			mark = strndup(optarg,
-				       4097 - sizeof(struct log_write_entry));
-			if (!mark) {
+			start_mark = strndup(optarg, 4097 -
+					     sizeof(struct log_write_entry));
+			if (!start_mark) {
+				fprintf(stderr, "Couldn't allocate memory\n");
+				exit(1);
+			}
+			break;
+		case END_MARK:
+			/*
+			 * Biggest sectorsize is 4k atm, so limit the mark to 4k
+			 * minus the size of the entry.  Say 4097 since we want
+			 * an extra slot for \0.
+			 */
+			end_mark = strndup(optarg, 4097 -
+					   sizeof(struct log_write_entry));
+			if (!end_mark) {
 				fprintf(stderr, "Couldn't allocate memory\n");
 				exit(1);
 			}
@@ -226,9 +260,16 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	ret = log_seek_entry(log, start_entry);
-	if (ret)
-		exit(1);
+	if (start_mark) {
+		ret = seek_to_mark(log, entry, start_mark);
+		if (ret)
+			exit(1);
+		free(start_mark);
+	} else {
+		ret = log_seek_entry(log, start_entry);
+		if (ret)
+			exit(1);
+	}
 
 	if ((fsck_command && !check_mode) || (!fsck_command && check_mode))
 		usage();
@@ -238,7 +279,7 @@ int main(int argc, char **argv)
 		while ((ret = log_seek_next_entry(log, entry, 1)) == 0) {
 			num_entries++;
 			if ((run_limit && num_entries == run_limit) ||
-			    should_stop(entry, stop_flags, mark)) {
+			    should_stop(entry, stop_flags, end_mark)) {
 				printf("%llu\n",
 				       (unsigned long long)log->cur_entry - 1);
 				log_free(log);
@@ -287,11 +328,12 @@ int main(int argc, char **argv)
 		}
 
 		if ((run_limit && num_entries == run_limit) ||
-		    should_stop(entry, stop_flags, mark))
+		    should_stop(entry, stop_flags, end_mark))
 			break;
 	}
 	fsync(log->replayfd);
 	log_free(log);
+	free(end_mark);
 	if (ret < 0)
 		exit(1);
 	return 0;
