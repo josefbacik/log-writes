@@ -60,7 +60,7 @@ static void usage(void)
 	fprintf(stderr, "\t--fsck - the fsck command to run, must specify "
 		"--check\n");
 	fprintf(stderr, "\t--check [<number>|flush|fua] when to check the "
-		"file system, mush specify --fsck");
+		"file system, mush specify --fsck\n");
 	exit(1);
 }
 
