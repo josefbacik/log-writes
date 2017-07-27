@@ -1,6 +1,6 @@
 #!/bin/bash
 
-. variables
+. ./variables
 
 SNAPSHOTBASE="replay-base"
 SNAPSHOTCOW="replay-cow"

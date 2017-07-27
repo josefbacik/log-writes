@@ -1,6 +1,6 @@
 #!/bin/bash
 
-. variables
+. ./variables
 
 [ -z $LOGDEV ] && exit "Must set logdev and replaydev"
 [ -z $REPLAYDEV ] && exit "Must set logdev and replaydev"

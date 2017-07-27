@@ -1,6 +1,6 @@
 #!/bin/bash
 
-. variables
+. ./variables
 
 # Don't modify these
 TABLE="0 $(blockdev --getsz $REPLAYDEV) log-writes $REPLAYDEV $LOGDEV"
