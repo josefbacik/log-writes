@@ -1,0 +1,9 @@
+#!/bin/bash
+
+LOGDEV=
+REPLAYDEV=
+TEST_MNT=
+FSCK=
+MKFS=
+START_MARK="mkfs"
+FSSTRESS=~/xfstests/ltp/fsstress

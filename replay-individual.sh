@@ -1,11 +1,7 @@
 #!/bin/bash
 
-# Modify these
-LOGDEV=
-REPLAYDEV=
-FSCK=
-TEST_MNT=
-START_MARK="mkfs"
+. variables
+
 SNAPSHOTBASE="replay-base"
 SNAPSHOTCOW="replay-cow"
 
