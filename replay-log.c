@@ -83,8 +83,9 @@ static int should_stop(struct log_write_entry *entry, u64 stop_flags,
 static int run_fsck(char *fsck_command)
 {
 	int ret = system(fsck_command);
-
-	return (ret < 0) ? ret : WEXITSTATUS(ret);
+	if (ret >= 0)
+		ret = WEXITSTATUS(ret);
+	return ret ? -1 : 0;
 }
 
 enum log_replay_check_mode {
