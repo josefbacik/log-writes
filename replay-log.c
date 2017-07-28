@@ -80,9 +80,12 @@ static int should_stop(struct log_write_entry *entry, u64 stop_flags,
 	return 0;
 }
 
-static int run_fsck(char *fsck_command)
+static int run_fsck(struct log *log, char *fsck_command)
 {
-	int ret = system(fsck_command);
+	int ret = fsync(log->replayfd);
+	if (ret)
+		return ret;
+	ret = system(fsck_command);
 	if (ret >= 0)
 		ret = WEXITSTATUS(ret);
 	return ret ? -1 : 0;
@@ -315,13 +318,13 @@ int main(int argc, char **argv)
 		if (fsck_command) {
 			if ((check_mode == CHECK_NUMBER) &&
 			    !(num_entries % check_number))
-				ret = run_fsck(fsck_command);
+				ret = run_fsck(log, fsck_command);
 			else if ((check_mode == CHECK_FUA) &&
 				 should_stop(entry, LOG_FUA_FLAG, NULL))
-				ret = run_fsck(fsck_command);
+				ret = run_fsck(log, fsck_command);
 			else if ((check_mode == CHECK_FLUSH) &&
 				 should_stop(entry, LOG_FLUSH_FLAG, NULL))
-				ret = run_fsck(fsck_command);
+				ret = run_fsck(log, fsck_command);
 			else
 				ret = 0;
 			if (ret)
