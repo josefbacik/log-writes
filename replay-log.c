@@ -327,8 +327,12 @@ int main(int argc, char **argv)
 				ret = run_fsck(log, fsck_command);
 			else
 				ret = 0;
-			if (ret)
+			if (ret) {
+				fprintf(stderr, "Fsck errored out on entry "
+					"%llu\n",
+					(unsigned long long)log->cur_entry - 1);
 				break;
+			}
 		}
 
 		if ((run_limit && num_entries == run_limit) ||
