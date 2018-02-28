@@ -117,6 +117,58 @@ int log_discard(struct log *log, struct log_write_entry *entry)
 	return 0;
 }
 
+#define DEFINE_LOG_FLAGS_STR_ENTRY(x)	\
+	{LOG_##x##_FLAG, #x}
+
+struct flags_to_str_entry {
+	u64 flags;
+	const char *str;
+} log_flags_table[] = {
+	DEFINE_LOG_FLAGS_STR_ENTRY(FLUSH),
+	DEFINE_LOG_FLAGS_STR_ENTRY(FUA),
+	DEFINE_LOG_FLAGS_STR_ENTRY(DISCARD),
+	DEFINE_LOG_FLAGS_STR_ENTRY(MARK)
+};
+
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+#define LOG_FLAGS_BUF_SIZE	128
+/*
+ * Convert numeric flags to human readable flags.
+ * @flags:	numeric flags
+ * @buf:	output buffer for human readable string.
+ * 		must have enough space (LOG_FLAGS_BUF_SIZE) to contain all
+ * 		the string
+ */
+static void entry_flags_to_str(u64 flags, char *buf)
+{
+	int empty = 1;
+	int left_len;
+	int i;
+
+	buf[0] = '\0';
+	for (i = 0; i < ARRAY_SIZE(log_flags_table); i++) {
+		if (flags & log_flags_table[i].flags) {
+			if (!empty)
+				strncat(buf, "|", LOG_FLAGS_BUF_SIZE);
+			empty = 0;
+			strncat(buf, log_flags_table[i].str, LOG_FLAGS_BUF_SIZE);
+			flags &= ~log_flags_table[i].flags;
+		}
+	}
+	if (flags) {
+		if (!empty)
+			strncat(buf, "|", LOG_FLAGS_BUF_SIZE);
+		empty = 0;
+		left_len = LOG_FLAGS_BUF_SIZE - strnlen(buf,
+						        LOG_FLAGS_BUF_SIZE);
+		if (left_len > 0)
+			snprintf(buf + strnlen(buf, LOG_FLAGS_BUF_SIZE),
+				 left_len, "UNKNOWN.%llu", flags);
+	}
+	if (empty)
+		strncpy(buf, "NONE", LOG_FLAGS_BUF_SIZE);
+}
+
 /*
  * @log: the log we are replaying.
  * @entry: where we put the entry.
@@ -135,6 +187,7 @@ int log_replay_next_entry(struct log *log, struct log_write_entry *entry,
 	size_t read_size = read_data ? log->sectorsize :
 		sizeof(struct log_write_entry);
 	char *buf;
+	char flags_buf[LOG_FLAGS_BUF_SIZE];
 	ssize_t ret;
 	off_t offset;
 
@@ -158,16 +211,17 @@ int log_replay_next_entry(struct log *log, struct log_write_entry *entry,
 		}
 	}
 
+	flags = le64_to_cpu(entry->flags);
+	entry_flags_to_str(flags, flags_buf);
 	if (log_writes_verbose)
-		printf("replaying %d: sector %llu, size %llu, flags %llu\n",
+		printf("replaying %d: sector %llu, size %llu, flags %llu(%s)\n",
 		       (int)log->cur_entry - 1,
 		       (unsigned long long)le64_to_cpu(entry->sector),
 		       (unsigned long long)size,
-		       (unsigned long long)le64_to_cpu(entry->flags));
+		       (unsigned long long)flags, flags_buf);
 	if (!size)
 		return 0;
 
-	flags = le64_to_cpu(entry->flags);
 	if (flags & LOG_DISCARD_FLAG)
 		return log_discard(log, entry);
 
