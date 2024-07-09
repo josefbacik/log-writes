@@ -54,13 +54,13 @@ static void usage(void)
 	fprintf(stderr, "\t--end-mark <mark> - replay to/find the given mark\n");
 	fprintf(stderr, "\t--find - put replay-log in find mode, will search "
 		"based on the other options\n");
-	fprintf(stderr, "\t--number-entries - print the number of entries in "
+	fprintf(stderr, "\t--num-entries - print the number of entries in "
 		"the log\n");
 	fprintf(stderr, "\t--no-discard - don't process discard entries\n");
 	fprintf(stderr, "\t--fsck - the fsck command to run, must specify "
 		"--check\n");
 	fprintf(stderr, "\t--check [<number>|flush|fua] when to check the "
-		"file system, mush specify --fsck\n");
+		"file system, must specify --fsck\n");
 	exit(1);
 }
 
